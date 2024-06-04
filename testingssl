@@ -1,0 +1,60 @@
+# Define the server URL and port
+$serverUrl = "your-server-url.com"
+$port = 443  # SSL port for HTTPS
+
+# Function to open a connection
+function Open-SSLConnection {
+    param (
+        [string]$url,
+        [int]$port
+    )
+
+    try {
+        # Create a TCP client
+        $client = New-Object System.Net.Sockets.TcpClient($url, $port)
+        
+        # Get the network stream
+        $networkStream = $client.GetStream()
+        
+        # Create an SSL stream
+        $sslStream = New-Object System.Net.Security.SslStream($networkStream, $false, { $true })
+
+        # Authenticate the server
+        $sslStream.AuthenticateAsClient($url)
+        
+        # Create the HTTP GET request
+        $request = "GET / HTTP/1.1`r`nHost: $url`r`nConnection: keep-alive`r`n`r`n"
+        $requestBytes = [System.Text.Encoding]::ASCII.GetBytes($request)
+
+        # Send the request
+        $sslStream.Write($requestBytes, 0, $requestBytes.Length)
+
+        # Keep the connection open indefinitely
+        while ($true) {
+            Start-Sleep -Seconds 5
+        }
+    } catch {
+        Write-Host "Error connecting to $url on port $port"
+    }
+}
+
+# Array to hold threads
+$threads = @()
+
+# Start 1000 connections
+for ($i = 1; $i -le 1000; $i++) {
+    $thread = [powershell]::Create().AddScript({
+        param ($url, $port)
+        Open-SSLConnection -url $url -port $port
+    }).AddArgument($serverUrl).AddArgument($port).BeginInvoke()
+
+    $threads += $thread
+}
+
+Write-Host "1000 SSL connections to $serverUrl on port $port are open. The requests are not closed."
+
+# Wait indefinitely to keep connections open
+Write-Host "Press Ctrl+C to exit and close the connections."
+while ($true) {
+    Start-Sleep -Seconds 60
+}
