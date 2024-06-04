@@ -1,0 +1,60 @@
+# Load the .NET HttpClient class
+Add-Type @"
+using System.Net.Http;
+public class HttpClientHandlerWrapper : HttpClientHandler
+{
+    protected override System.Net.Http.HttpResponseMessage Send(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+    {
+        return base.Send(request, cancellationToken);
+    }
+}
+"@
+
+# Define the server URL
+$serverUrl = "https://your-server-url.com"
+
+# Create an instance of HttpClient
+$handler = New-Object HttpClientHandlerWrapper
+$client = [System.Net.Http.HttpClient]::new($handler)
+
+# Function to open a connection
+function Open-Connection {
+    param (
+        [string]$url
+    )
+
+    # Create the HTTP GET request
+    $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $url)
+
+    # Send the request and keep the connection open
+    $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead)
+
+    # Output the response status code (optional)
+    $response.Result.StatusCode
+
+    # Keep the connection open indefinitely
+    while ($true) {
+        Start-Sleep -Seconds 5
+    }
+}
+
+# Array to hold tasks
+$tasks = @()
+
+# Start 1000 connections
+for ($i = 1; $i -le 1000; $i++) {
+    $task = [powershell]::Create().AddScript({
+        param ($url)
+        Open-Connection -url $url
+    }).AddArgument($serverUrl).BeginInvoke()
+
+    $tasks += $task
+}
+
+Write-Host "1000 connections to $serverUrl are open. The requests are not closed."
+
+# Wait indefinitely to keep connections open
+Write-Host "Press Ctrl+C to exit and close the connections."
+while ($true) {
+    Start-Sleep -Seconds 60
+}
