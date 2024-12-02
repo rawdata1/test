@@ -1,0 +1,115 @@
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+import matplotlib.pyplot as plt
+
+# Load and preprocess Zeek conn.log (CSV format)
+def load_logs(filepath):
+    print("Loading Zeek logs...")
+    # Load CSV file
+    data = pd.read_csv(filepath)
+    
+    # Select useful features (adjust based on your CSV structure)
+    features = ['orig_bytes', 'resp_bytes', 'duration', 'orig_pkts', 'resp_pkts']
+    data = data[features]
+    
+    # Fill missing values (if any) with 0
+    data = data.fillna(0)
+    
+    return data
+
+# Step 1: Apply K-Means Clustering
+def kmeans_detection(data, n_clusters=3):
+    print("Running K-Means clustering...")
+    scaler = MinMaxScaler()
+    scaled_data = scaler.fit_transform(data)
+    
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    data['cluster'] = kmeans.fit_predict(scaled_data)
+    
+    # Visualize clusters
+    plt.scatter(data['orig_bytes'], data['resp_bytes'], c=data['cluster'], cmap='viridis')
+    plt.title("K-Means Clustering Results")
+    plt.xlabel("orig_bytes")
+    plt.ylabel("resp_bytes")
+    plt.show()
+    
+    return data
+
+# Step 2: Apply Isolation Forest
+def isolation_forest_detection(data):
+    print("Running Isolation Forest...")
+    scaler = MinMaxScaler()
+    scaled_data = scaler.fit_transform(data.drop('cluster', axis=1))
+    
+    iso_forest = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    data['anomaly'] = iso_forest.fit_predict(scaled_data)
+    
+    # Anomalies are marked as -1
+    data['anomaly'] = data['anomaly'].apply(lambda x: 1 if x == -1 else 0)
+    
+    return data
+
+# Step 3: Apply LSTM for Temporal Analysis
+def lstm_detection(data):
+    print("Running LSTM...")
+    # Scale the data
+    scaler = MinMaxScaler()
+    scaled_data = scaler.fit_transform(data.drop(['cluster', 'anomaly'], axis=1))
+    
+    # Create sequences for LSTM
+    seq_length = 10
+    sequences = []
+    for i in range(len(scaled_data) - seq_length):
+        sequences.append(scaled_data[i:i+seq_length])
+    
+    sequences = np.array(sequences)
+    X = sequences
+    y = np.array(data['anomaly'][seq_length:])
+    
+    # Build LSTM model
+    model = Sequential([
+        LSTM(50, activation='relu', input_shape=(seq_length, X.shape[2])),
+        Dense(1, activation='sigmoid')
+    ])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    
+    # Train LSTM
+    model.fit(X, y, epochs=5, batch_size=32, verbose=1)
+    
+    # Predict anomalies
+    predictions = model.predict(X)
+    data['lstm_anomaly'] = 0
+    data['lstm_anomaly'][seq_length:] = (predictions > 0.5).astype(int).flatten()
+    
+    return data
+
+# Main function
+def main():
+    # Filepath to Zeek conn.log (CSV format)
+    filepath = "conn.csv"  # Update with your CSV file's name
+    data = load_logs(filepath)
+    
+    # K-Means Clustering
+    data = kmeans_detection(data)
+    
+    # Isolation Forest
+    data = isolation_forest_detection(data)
+    
+    # LSTM
+    data = lstm_detection(data)
+    
+    # Analyze Results
+    print("Detection results:")
+    print(data[['orig_bytes', 'resp_bytes', 'duration', 'anomaly', 'lstm_anomaly']].head(10))
+    
+    # Save results
+    data.to_csv("detection_results.csv", index=False)
+    print("Results saved to detection_results.csv")
+
+if __name__ == "__main__":
+    main()
