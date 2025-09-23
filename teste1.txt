@@ -1,19 +1,42 @@
-Zero-Trust Principle	Control	Network Construct Layer	Platform Construct Layer	Application Construct Layer	Overall Effectiveness
-Authentication and Authorization	Authenticated Logging: Use secure Syslog protocols (such as Syslog over TLS with mutual authentication) or message signing to verify log sources and prevent unauthorized log injection.		✓		Effective
-Authentication and Authorization	Source Restrictions: Apply strict network controls (firewalls or allowlists) to only accept log traffic from trusted IPs or hosts, blocking spoofed or unexpected sources.	✓	✓		Effective
-Authentication and Authorization	Network Segmentation: Isolate logging networks or VLANs to restrict access, ensuring logging ports are not exposed to unauthorized users or the public internet.	✓			Effective
-Encryption	Encryption: Use TLS with TCP (as specified in RFC 5425) to encrypt log transmissions and prevent eavesdropping; avoid sending sensitive logs over plaintext UDP on untrusted networks.		✓		Effective
-Encryption	Secure Channels: Protect remote log collection by using secure VPN tunnels or IPsec, ensuring log data travels through encrypted channels.	✓			Effective
-Encryption	Message Integrity: Use secure logging systems with integrity checks (like HMAC or digital signatures) to detect log tampering; Syslog with TLS provides both encryption and integrity.		✓		Effective
-Least Privilege and Session Management	System Hardening: Configure log server securely by disabling unnecessary services, minimizing privileges for Syslog processes, and enforcing least privilege for all accounts.		✓		Effective
-Least Privilege and Session Management	Rate Limiting: Set up the Syslog daemon or aggregator to limit incoming messages per source, preventing overload from rogue devices by dropping or deferring excess logs.		✓		Acceptable
-Least Privilege and Session Management	Secure Coding Practices: Use safe logging functions that treat input as data, always use format specifiers, and sanitize user input to prevent format string injection; conduct code reviews and use static analysis or fuzz testing to catch vulnerabilities.			✓	Effective
-Least Privilege and Session Management	Input Sanitization: Validate and sanitize all external data before logging, removing or encoding control characters and dangerous sequences to prevent code injection or escape sequence attacks.			✓	Effective
-Least Privilege and Session Management	Limit Sensitive Data in Logs: Configure systems to avoid logging secrets or personal data, minimizing the impact if logs are compromised. Ensure logs and log viewing interfaces are not exposed to untrusted networks to reduce exploitation risks.	✓	✓	✓	Effective
-Observability/Integration with other security controls	Integrity Monitoring: Employ host-based security or configuration monitoring tools to detect and alert on unauthorized changes to logging setups or abnormal log source behavior.		✓		Acceptable
-Observability/Integration with other security controls	Immutable Storage: Store logs on append-only or tamper-resistant media so logs cannot be altered or deleted after arrival.		✓		Effective
-Observability/Integration with other security controls	Time Synchronization: Synchronize system clocks (e.g., with NTP) and include timestamps in logs to help identify out-of-sequence or altered entries and maintain reliable records for investigations.		✓		Acceptable
-Observability/Integration with other security controls	DoS Protection: Use network-based DDoS defenses and filtering services to block excessive traffic before it reaches the Syslog server; firewalls and IDS/IPS should filter malicious sources and rate-limit logging traffic.	✓			Acceptable
-Observability/Integration with other security controls	Resilient Architecture: Build a scalable, distributed logging system with load balancing and redundant servers, ensuring continued operation during failures or overloads, and provide sufficient buffer/storage for log surges.	✓	✓		Acceptable
-Observability/Integration with other security controls	Secure Patching: Regularly update Syslog software, host OS, and related dependencies with the latest security patches to prevent exploitation of known vulnerabilities.		✓		Acceptable
-Observability/Integration with other security controls	Vulnerability Management: Perform regular vulnerability scans and penetration tests, remediate identified weaknesses, deploy intrusion detection/prevention systems, and restrict Syslog access to authorized senders to reduce exposure.	✓	✓		Acceptable
+
+SNMP — rationale for classifications
+
+Control	Classification	Rationale
+Restrict access: Use firewalls and Access Control Lists (ACLs) to limit SNMP communication to only trusted management stations.	Effective	Prevents untrusted sources from reaching UDP/TCP 161–162 at all, stopping enumeration regardless of credentials.
+Restrict network access: Limit SNMP communication to a management network or specific, trusted IP addresses using firewall rules or ACLs.	Effective	Isolates SNMP to OOB/management segments; probing from user/Internet segments can’t occur.
+Use ACLs and disable unnecessary MIBs: Restrict SNMP access to known hosts only and disable MIBs that can be used for amplification.	Effective	Combines source control with data minimization, reducing both who can query and what can be learned.
+Upgrade to SNMPv3: This is the most effective mitigation, as SNMPv3 provides strong authentication and encryption for SNMP messages.	Effective	Eliminates plaintext communities and protects OIDs/creds from sniffing and tampering.
+Use network encryption: If an upgrade is not possible, protect the SNMP traffic by using the Transport Security Model or by deploying IPsec tunnels to encrypt communication at the network layer.	Effective	Encrypts legacy paths so credentials and responses cannot be passively captured.
+Use the Transport Security Model (TSM): Where supported, use the Transport Security Model as an alternative to USM, as it aims to secure SNMP communication more robustly.	Effective	Leverages TLS/DTLS/SSH identities and modern cipher agility; protects against eavesdropping/MitM.
+Implement SNMP views: Limit the Management Information Base (MIB) information that is exposed by SNMP to only what is absolutely necessary for monitoring.	Effective	Directly reduces discoverable topology/asset/route data even with valid credentials.
+Disable unnecessary SNMP agents: Turn off SNMP services on any device that does not require central monitoring.	Effective	Removes the service entirely → no surface to enumerate.
+Disable SNMP on devices if not needed: Reduce the number of potential targets for amplification attacks by disabling the protocol where it is not essential.	Effective	Shrinks the queryable set of devices and mitigates amplification/footprinting.
+Use read-only access: Unless a specific task requires it, configure SNMP agents to use read-only community strings to prevent configuration changes.	Acceptable	Stops tampering but still allows full reads; attackers with RO access can still map the network.
+Rate limiting and traffic filtering: Configure network devices and firewalls to limit the number of SNMP queries accepted from a single source.	Acceptable	Throttles bulk walks and creates noise, but does not prevent information disclosure.
+Monitor traffic for anomalies: Actively monitor SNMP traffic for unusual patterns or signs of tampering, even when using SNMPv3.	Acceptable	Detection only; enumeration may occur before alert/response.
+Vulnerability scanning: Use vulnerability scanners to regularly check devices for known SNMP-related exploits.	Acceptable	Finds weaknesses/misconfigurations but doesn’t block reads in real time.
+Regular patching: Keep device firmware and SNMP agent software updated to patch known vulnerabilities and ensure the USM is correctly configured and not susceptible to manipulation.	Acceptable	Reduces exploitability; doesn’t inherently limit readable OIDs.
+Regular patching and updates: Keep all network device firmware and SNMP agent software up-to-date to fix known buffer overflow vulnerabilities.	Acceptable	Same as above—important hygiene, not a preventative for info disclosure.
+Network hardening: Follow security best practices for network hardening, such as disabling unnecessary services and using intrusion detection systems to monitor for anomalous traffic.	Acceptable	Broad posture uplift and detection; needs ACLs/views/encryption to fully prevent disclosure.
+
+Syslog — rationale for classifications
+
+Control	Classification	Rationale
+Authenticated Logging: Use secure Syslog protocols (such as Syslog over TLS with mutual authentication) or message signing to verify log sources and prevent unauthorized log injection.	Effective	Proves sender identity and prevents spoofed/injected records.
+Source Restrictions: Apply strict network controls (firewalls or allowlists) to only accept log traffic from trusted IPs or hosts, blocking spoofed or unexpected sources.	Effective	Hard-stops untrusted senders from reaching the collector.
+Network Segmentation: Isolate logging networks or VLANs to restrict access, ensuring logging ports are not exposed to unauthorized users or the public internet.	Effective	Limits exposure of collectors and forwarding paths to authorized zones.
+Encryption: Use TLS with TCP (as specified in RFC 5425) to encrypt log transmissions and prevent eavesdropping; avoid sending sensitive logs over plaintext UDP on untrusted networks.	Effective	Protects confidentiality/integrity in transit; blocks passive interception/alteration.
+Secure Channels: Protect remote log collection by using secure VPN tunnels or IPsec, ensuring log data travels through encrypted channels.	Effective	Provides encrypted, authenticated tunnels for collectors/forwarders.
+Message Integrity: Use secure logging systems with integrity checks (like HMAC or digital signatures) to detect log tampering; Syslog with TLS provides both encryption and integrity.	Effective	Detects/blocks alteration of messages in flight.
+System Hardening: Configure log server securely by disabling unnecessary services, minimizing privileges for Syslog processes, and enforcing least privilege for all accounts.	Effective	Reduces compromise blast radius and service abuse on collectors.
+Secure Coding Practices: Use safe logging functions that treat input as data…	Effective	Prevents format-string/escape-sequence abuses and injection via log sinks/parsers.
+Input Sanitization: Validate and sanitize all external data before logging…	Effective	Removes dangerous payloads that could impact parsers/terminals or cause code execution.
+Limit Sensitive Data in Logs: Configure systems to avoid logging secrets or personal data…	Effective	Minimizes impact if logs are intercepted or a collector is breached.
+Immutable Storage: Store logs on append-only or tamper-resistant media so logs cannot be altered or deleted after arrival.	Effective	Preserves evidentiary integrity; prevents post-facto manipulation.
+Rate Limiting: Set up the Syslog daemon or aggregator to limit incoming messages per source…	Acceptable	Mitigates overload/DoS but doesn’t authenticate sources or encrypt content.
+Integrity Monitoring: Employ host-based security or configuration monitoring tools to detect and alert on unauthorized changes…	Acceptable	Detects configuration drift/abuse; does not itself prevent spoofing/eavesdropping.
+Time Synchronization: Synchronize system clocks (e.g., with NTP)…	Acceptable	Improves forensic reliability; doesn’t block injection or interception.
+DoS Protection: Use network-based DDoS defenses and filtering services…	Acceptable	Shields availability; authenticity/confidentiality still depend on TLS/auth.
+Resilient Architecture: Build a scalable, distributed logging system…	Acceptable	Maintains service under stress; doesn’t stop spoofing/tampering on its own.
+Secure Patching: Regularly update Syslog software, host OS…	Acceptable	Reduces known-vuln risk; not a direct control against spoofing/injection.
+Vulnerability Management: Perform regular vulnerability scans and penetration tests…	Acceptable	Identifies weaknesses; effectiveness depends on downstream remediation.
