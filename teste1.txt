@@ -21,3 +21,6 @@ AAA outages or permissive fail-open behavior create security gaps and operationa
 Insufficient monitoring misses brute-force, lateral movement, or policy drift.	SIEM/NDR detections: auth-failure spikes, new device IPs contacting AAA, unusual accounting size/rate, sudden role/priv changes; alert on TCP/49 observed outside mgmt networks; periodic control attestation reports.
 
 If you want this delivered as a CSV/Word table, say the word and I’ll generate it.
+
+
+The AAA ↔ directory link (e.g., TACACS+/RADIUS/PAM to AD/LDAP) uses plaintext or weakly protected LDAP when TLS, signing, or channel binding aren’t enforced, or when STARTTLS can be stripped. An on-path adversary can sniff simple binds, relay NTLM, or downgrade auth to capture credentials and impersonate admins. This enables authorization bypass, privilege escalation, and lateral movement while undermining the integrity of AAA decisions and audit trails.
